@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/crypto-smoke/blockchain"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -12,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"math/big"
 	"sync"
+	"time"
 )
 
 type pairData struct {
@@ -78,9 +78,18 @@ func main() {
 
 
 	*/
+
+	var days uint64 = 30
+	goRoutines := 4000
+	startTime := time.Now()
+	defer func() {
+		log.Info().Str("duration", time.Since(startTime).String()).Msg("complete")
+	}()
+
 	log.Logger = zerolog.New(zerolog.NewConsoleWriter())
 
-	client, err := ethclient.Dial("https://rpc.ankr.com/eth")
+	log.Info().Uint64("days", days).Int("go routines", goRoutines).Msg("starting data request")
+	client, err := ethclient.Dial("ws://ethnode:9545")
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed dialing node")
 	}
@@ -106,10 +115,10 @@ func main() {
 	}
 
 	// 7 days worth of blocks
-	var start uint64 = 60 * 60 * 24 * 7 / 13
+	var start uint64 = 60 * 60 * 24 * days / 13
 	howManyWeWant := start
 
-	maxGoroutines := 1000
+	maxGoroutines := goRoutines
 	guard := make(chan struct{}, maxGoroutines)
 	ch := make(chan reserves)
 	var stuff = make(map[uint64]string)
@@ -135,7 +144,9 @@ func main() {
 			//fmt.Println(priceString, new(big.Float).Quo(r1, r0).Text('f', -1))
 
 			if count == howManyWeWant {
-				fmt.Println("done reading")
+				log.Debug().
+					Uint64("responses", count).
+					Msg("all data received")
 				break
 			}
 		}
@@ -173,9 +184,8 @@ func main() {
 		lastBlock = new(big.Int).Add(lastBlock, big.NewInt(1))
 	}
 
-	fmt.Println("waiting")
+	log.Debug().Msg("waiting for all go routines to finish")
 	wg.Wait()
-	fmt.Println("done")
 	//for k, v := range stuff {
 	//fmt.Println(k, v)
 	//}
